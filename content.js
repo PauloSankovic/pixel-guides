@@ -112,24 +112,29 @@
 
       .panel {
         position: fixed; right: 12px; bottom: 12px; pointer-events: auto;
-        display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
-        padding: 4px; border-radius: 6px; background: #1f2328;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+        padding: 6px; border-radius: 8px; background: #1f2328;
         font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       }
-      .panel button, .panel select {
-        all: unset; cursor: pointer; padding: 6px 10px; border-radius: 4px; color: #fff;
+      .panel button {
+        all: unset; cursor: pointer; height: 28px; padding: 0 12px; border-radius: 5px;
+        color: #fff; white-space: nowrap;
       }
-      .panel button:hover, .panel select:hover { background: #3a3f45; }
-      .panel button.on, .panel select.on { background: #2bb3ff; }
-      .panel select option { background: #1f2328; color: #fff; }
-      .panel .row { display: flex; gap: 4px; }
-      .settings label { display: flex; align-items: center; gap: 4px; padding: 0 6px; color: #d0d7de; font-size: 11px; }
+      .panel button:hover { background: #3a3f45; }
+      .panel button.on { background: #2bb3ff; }
+      .panel button.close { width: 28px; padding: 0; text-align: center; font-size: 16px; }
+      .panel .row { display: flex; align-items: center; gap: 6px; }
+      .settings { padding: 0 2px; }
+      .settings label { display: flex; align-items: center; gap: 6px; color: #d0d7de; font-size: 11px; }
+      .settings label + label { margin-left: 8px; }
       .settings input {
-        all: unset; width: 40px; padding: 3px 4px; border-radius: 3px;
-        background: #0d1117; color: #fff; text-align: right;
+        all: unset; width: 40px; height: 22px; padding: 0 6px; border-radius: 4px;
+        background: #0d1117; color: #fff; text-align: right; appearance: textfield;
         font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
+      .settings input:focus { outline: 1px solid #2bb3ff; }
+      .settings input::-webkit-inner-spin-button, .settings input::-webkit-outer-spin-button { display: none; }
     </style>
     <div class="capture" hidden></div>
     <canvas class="ruler top"></canvas>
@@ -157,18 +162,10 @@
       <div class="row">
       <button data-action="inspect" title="Hover elements to see their box, size and spacing. Click to add guides at its edges, Shift+click for its center. Esc exits.">Inspect</button>
       <button data-action="center" title="Dashed lines through the center of the viewport">Center</button>
-      <select data-action="grid" title="Grid overlay, aligned to the top left of the page">
-        <option value="0">Grid</option>
-        <option value="4">4px grid</option>
-        <option value="8">8px grid</option>
-        <option value="10">10px grid</option>
-        <option value="12">12px grid</option>
-        <option value="16">16px grid</option>
-        <option value="24">24px grid</option>
-      </select>
+      <button data-action="grid" title="Grid overlay aligned to the top left of the page. Click to cycle 4, 8, 10, 12, 16, 24px and off.">Grid</button>
       <button data-action="columns" title="Column layout grid, centered in the viewport">Columns</button>
       <button data-action="clear" title="Remove all guides">Clear</button>
-      <button data-action="close" title="Hide Pixel Guides (click the toolbar button to show again)">×</button>
+      <button data-action="close" class="close" title="Hide Pixel Guides (click the toolbar button to show again)">×</button>
       </div>
     </div>
   `;
@@ -183,7 +180,7 @@
   const columnsEl = $(".columns");
   const settings = $(".settings");
   const columnInputs = $$(".settings input");
-  const gridSelect = $(".panel select");
+  const GRID_SIZES = [0, 4, 8, 10, 12, 16, 24];
   const guidesEl = $(".guides");
   const gapsEl = $(".gaps");
   const box = $(".box");
@@ -492,8 +489,8 @@
     const major = `${size * 4}px ${size * 4}px`;
     const minor = `${size}px ${size}px`;
     grid.style.backgroundSize = `${major}, ${major}, ${minor}, ${minor}`;
-    gridSelect.value = String(size);
-    gridSelect.classList.toggle("on", size > 0);
+    buttons.grid.textContent = size ? `Grid ${size}px` : "Grid";
+    buttons.grid.classList.toggle("on", size > 0);
     positionGrid();
     save();
   }
@@ -534,9 +531,8 @@
       save();
     });
   }
-  gridSelect.addEventListener("change", () => {
-    setGrid(Number(gridSelect.value));
-    gridSelect.blur();
+  buttons.grid.addEventListener("click", () => {
+    setGrid(GRID_SIZES[(GRID_SIZES.indexOf(state.grid) + 1) % GRID_SIZES.length]);
   });
   buttons.clear.addEventListener("click", () => {
     for (const g of [...state.guides]) removeGuide(g);

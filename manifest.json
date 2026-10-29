@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Pixel Guides",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Rulers, draggable guide lines, center lines and an element inspector to check alignment, spacing and centering on any page.",
   "icons": {
     "48": "icons/icon-48.png",
