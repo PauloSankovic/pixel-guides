@@ -20,11 +20,16 @@ current tab. Click it again, or the `×` in the panel, to hide it.
     the element under the pointer (hold `Shift` to disable snapping) and shows
     the distance to the neighbouring guides, which makes equal spacing easy to
     verify.
+  - The last guide you created, dragged or clicked is highlighted. Arrow keys
+    nudge it by 1px, `Shift`+arrow by 10px, `Delete` removes it and `Esc`
+    deselects it.
   - Drag a guide back onto a ruler, or double-click it, to remove it.
   - Guides are remembered per page for the browser tab's lifetime, so they
     survive a reload while you tweak CSS.
 - **Center lines** through the middle of the viewport, to see at a glance
   whether the layout is centered.
+- **Grid overlay** of 4, 8, 10, 12, 16 or 24px, anchored to the top left of
+  the page, with a stronger line every fourth cell.
 - **Inspect mode.** Hover any element to see its box, its size and its
   distance to each edge of its container. Equal left/right or top/bottom gaps
   are marked `centered`. Dashed lines extend the element's edges across the

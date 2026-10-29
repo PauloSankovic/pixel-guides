@@ -14,12 +14,13 @@
 
   // Guide positions are in document coordinates so they stay attached to the
   // page content while scrolling. Each guide is { axis: "x" | "y", pos, el }.
-  const state = { guides: [], center: false, inspect: false };
+  const state = { guides: [], center: false, grid: 0, inspect: false };
   try {
     const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     if (saved) {
       state.guides = saved.guides || [];
       state.center = Boolean(saved.center);
+      state.grid = Number(saved.grid) || 0;
     }
   } catch {
     // Ignore unreadable storage.
@@ -49,6 +50,16 @@
       .ruler.left { top: var(--ruler); left: 0; cursor: col-resize; }
       .corner { position: fixed; top: 0; left: 0; width: var(--ruler); height: var(--ruler); background: #1f2328; }
 
+      .grid {
+        position: fixed; inset: 0;
+        /* Faint lines every cell, a stronger line every fourth cell. */
+        background-image:
+          linear-gradient(to right, rgba(43, 179, 255, 0.35) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(43, 179, 255, 0.35) 1px, transparent 1px),
+          linear-gradient(to right, rgba(43, 179, 255, 0.12) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(43, 179, 255, 0.12) 1px, transparent 1px);
+      }
+
       .center { position: fixed; }
       .center.x { left: 50%; top: 0; bottom: 0; border-left: 1px dashed rgba(255, 79, 163, 0.8); }
       .center.y { top: 50%; left: 0; right: 0; border-top: 1px dashed rgba(255, 79, 163, 0.8); }
@@ -65,6 +76,8 @@
         background: #2bb3ff; white-space: nowrap;
       }
       .guide.snap .label { background: #ff4fa3; }
+      .guide.active::before { background: #ffd166; }
+      .guide.active .label { background: #ffd166; color: #1f2328; }
       .guide.y .label { left: calc(var(--ruler) + 4px); top: 5px; }
       .guide.x .label { top: calc(var(--ruler) + 4px); left: 5px; }
 
@@ -90,16 +103,18 @@
         font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       }
-      .panel button {
+      .panel button, .panel select {
         all: unset; cursor: pointer; padding: 6px 10px; border-radius: 4px; color: #fff;
       }
-      .panel button:hover { background: #3a3f45; }
-      .panel button.on { background: #2bb3ff; }
+      .panel button:hover, .panel select:hover { background: #3a3f45; }
+      .panel button.on, .panel select.on { background: #2bb3ff; }
+      .panel select option { background: #1f2328; color: #fff; }
     </style>
     <div class="capture" hidden></div>
     <canvas class="ruler top"></canvas>
     <canvas class="ruler left"></canvas>
     <div class="corner"></div>
+    <div class="grid" hidden></div>
     <div class="center x" hidden></div>
     <div class="center y" hidden></div>
     <div class="guides"></div>
@@ -113,6 +128,15 @@
     <div class="panel">
       <button data-action="inspect" title="Hover elements to see their box, size and spacing. Click to add guides at its edges, Shift+click for its center. Esc exits.">Inspect</button>
       <button data-action="center" title="Dashed lines through the center of the viewport">Center</button>
+      <select data-action="grid" title="Grid overlay, aligned to the top left of the page">
+        <option value="0">Grid</option>
+        <option value="4">4px grid</option>
+        <option value="8">8px grid</option>
+        <option value="10">10px grid</option>
+        <option value="12">12px grid</option>
+        <option value="16">16px grid</option>
+        <option value="24">24px grid</option>
+      </select>
       <button data-action="clear" title="Remove all guides">Clear</button>
       <button data-action="close" title="Hide Pixel Guides (click the toolbar button to show again)">×</button>
     </div>
@@ -124,6 +148,8 @@
   const rulerTop = $(".ruler.top");
   const rulerLeft = $(".ruler.left");
   const centerLines = $$(".center");
+  const grid = $(".grid");
+  const gridSelect = $(".panel select");
   const guidesEl = $(".guides");
   const gapsEl = $(".gaps");
   const box = $(".box");
@@ -135,7 +161,7 @@
   function save() {
     const guides = state.guides.map(({ axis, pos }) => ({ axis, pos }));
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ guides, center: state.center }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ guides, center: state.center, grid: state.grid }));
     } catch {
       // Storage may be unavailable; guides then live for this page view only.
     }
@@ -193,6 +219,15 @@
 
   // ---- Guides -------------------------------------------------------------
 
+  // The last guide that was created, dragged or clicked. Arrow keys nudge it.
+  let active = null;
+
+  function setActive(g) {
+    if (active) active.el.classList.remove("active");
+    active = g;
+    if (g) g.el.classList.add("active");
+  }
+
   function positionGuide(g) {
     const scroll = g.axis === "x" ? scrollX : scrollY;
     g.el.style[g.axis === "x" ? "left" : "top"] = g.pos - scroll - 3 + "px";
@@ -214,13 +249,21 @@
     guidesEl.append(el);
     state.guides.push(g);
     positionGuide(g);
+    setActive(g);
     save();
     return g;
   }
 
   function removeGuide(g) {
+    if (active === g) setActive(null);
     g.el.remove();
     state.guides = state.guides.filter((other) => other !== g);
+    save();
+  }
+
+  function nudge(g, delta) {
+    g.pos = Math.max(0, g.pos + delta);
+    positionGuide(g);
     save();
   }
 
@@ -267,6 +310,7 @@
   function startDrag(g, e) {
     e.preventDefault();
     e.stopPropagation();
+    setActive(g);
     g.el.setPointerCapture(e.pointerId);
 
     const move = (e) => {
@@ -401,6 +445,25 @@
 
   // ---- Panel and lifecycle -------------------------------------------------
 
+  function positionGrid() {
+    if (!state.grid) return;
+    const major = `${-(scrollX % (state.grid * 4))}px ${-(scrollY % (state.grid * 4))}px`;
+    const minor = `${-(scrollX % state.grid)}px ${-(scrollY % state.grid)}px`;
+    grid.style.backgroundPosition = `${major}, ${major}, ${minor}, ${minor}`;
+  }
+
+  function setGrid(size) {
+    state.grid = size;
+    grid.hidden = !size;
+    const major = `${size * 4}px ${size * 4}px`;
+    const minor = `${size}px ${size}px`;
+    grid.style.backgroundSize = `${major}, ${major}, ${minor}, ${minor}`;
+    gridSelect.value = String(size);
+    gridSelect.classList.toggle("on", size > 0);
+    positionGrid();
+    save();
+  }
+
   function setCenter(on) {
     state.center = on;
     for (const line of centerLines) line.hidden = !on;
@@ -410,18 +473,39 @@
 
   buttons.inspect.addEventListener("click", () => setInspect(!state.inspect));
   buttons.center.addEventListener("click", () => setCenter(!state.center));
+  gridSelect.addEventListener("change", () => {
+    setGrid(Number(gridSelect.value));
+    gridSelect.blur();
+  });
   buttons.clear.addEventListener("click", () => {
     for (const g of [...state.guides]) removeGuide(g);
   });
   buttons.close.addEventListener("click", () => toggle());
 
+  const NUDGE = { x: { ArrowLeft: -1, ArrowRight: 1 }, y: { ArrowUp: -1, ArrowDown: 1 } };
+  const isEditing = (el) => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+
   document.addEventListener(
     "keydown",
     (e) => {
-      if (e.key === "Escape" && !host.hidden && state.inspect) {
+      if (host.hidden) return;
+      if (e.key === "Escape") {
+        if (state.inspect) setInspect(false);
+        else if (active) setActive(null);
+        else return;
         e.stopPropagation();
-        setInspect(false);
+        return;
       }
+      if (!active || isEditing(document.activeElement) || isEditing(root.activeElement)) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        removeGuide(active);
+      } else if (e.key in NUDGE[active.axis]) {
+        nudge(active, NUDGE[active.axis][e.key] * (e.shiftKey ? 10 : 1));
+      } else {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
     },
     true,
   );
@@ -433,6 +517,7 @@
     drawRuler(rulerTop, true);
     drawRuler(rulerLeft, false);
     for (const g of state.guides) positionGuide(g);
+    positionGrid();
     refreshBox();
   }
   function scheduleRender() {
@@ -452,7 +537,9 @@
   const restored = state.guides;
   state.guides = [];
   for (const { axis, pos } of restored) addGuide(axis, pos);
+  setActive(null);
   setCenter(state.center);
+  setGrid(state.grid);
 
   document.documentElement.append(host);
   render();
