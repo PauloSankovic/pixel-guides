@@ -14,13 +14,20 @@
 
   // Guide positions are in document coordinates so they stay attached to the
   // page content while scrolling. Each guide is { axis: "x" | "y", pos, el }.
-  const state = { guides: [], center: false, grid: 0, inspect: false };
+  const state = {
+    guides: [],
+    center: false,
+    grid: 0,
+    columns: { on: false, count: 12, gutter: 24, width: 1200, margin: 0 },
+    inspect: false,
+  };
   try {
     const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     if (saved) {
       state.guides = saved.guides || [];
       state.center = Boolean(saved.center);
       state.grid = Number(saved.grid) || 0;
+      Object.assign(state.columns, saved.columns);
     }
   } catch {
     // Ignore unreadable storage.
@@ -59,6 +66,12 @@
           linear-gradient(to right, rgba(43, 179, 255, 0.12) 1px, transparent 1px),
           linear-gradient(to bottom, rgba(43, 179, 255, 0.12) 1px, transparent 1px);
       }
+
+      .columns {
+        position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+        display: grid;
+      }
+      .columns div { background: rgba(255, 79, 163, 0.1); border-inline: 1px solid rgba(255, 79, 163, 0.25); }
 
       .center { position: fixed; }
       .center.x { left: 50%; top: 0; bottom: 0; border-left: 1px dashed rgba(255, 79, 163, 0.8); }
@@ -99,7 +112,8 @@
 
       .panel {
         position: fixed; right: 12px; bottom: 12px; pointer-events: auto;
-        display: flex; gap: 4px; padding: 4px; border-radius: 6px; background: #1f2328;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+        padding: 4px; border-radius: 6px; background: #1f2328;
         font: 500 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       }
@@ -109,12 +123,20 @@
       .panel button:hover, .panel select:hover { background: #3a3f45; }
       .panel button.on, .panel select.on { background: #2bb3ff; }
       .panel select option { background: #1f2328; color: #fff; }
+      .panel .row { display: flex; gap: 4px; }
+      .settings label { display: flex; align-items: center; gap: 4px; padding: 0 6px; color: #d0d7de; font-size: 11px; }
+      .settings input {
+        all: unset; width: 40px; padding: 3px 4px; border-radius: 3px;
+        background: #0d1117; color: #fff; text-align: right;
+        font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
     </style>
     <div class="capture" hidden></div>
     <canvas class="ruler top"></canvas>
     <canvas class="ruler left"></canvas>
     <div class="corner"></div>
     <div class="grid" hidden></div>
+    <div class="columns" hidden></div>
     <div class="center x" hidden></div>
     <div class="center y" hidden></div>
     <div class="guides"></div>
@@ -126,6 +148,13 @@
     <div class="ext v" hidden></div>
     <div class="info" hidden></div>
     <div class="panel">
+      <div class="row settings" hidden>
+        <label>Columns <input data-column="count" type="number" min="1" max="24"></label>
+        <label>Gutter <input data-column="gutter" type="number" min="0" max="200"></label>
+        <label title="0 = full width">Max width <input data-column="width" type="number" min="0" max="4000"></label>
+        <label>Margin <input data-column="margin" type="number" min="0" max="500"></label>
+      </div>
+      <div class="row">
       <button data-action="inspect" title="Hover elements to see their box, size and spacing. Click to add guides at its edges, Shift+click for its center. Esc exits.">Inspect</button>
       <button data-action="center" title="Dashed lines through the center of the viewport">Center</button>
       <select data-action="grid" title="Grid overlay, aligned to the top left of the page">
@@ -137,8 +166,10 @@
         <option value="16">16px grid</option>
         <option value="24">24px grid</option>
       </select>
+      <button data-action="columns" title="Column layout grid, centered in the viewport">Columns</button>
       <button data-action="clear" title="Remove all guides">Clear</button>
       <button data-action="close" title="Hide Pixel Guides (click the toolbar button to show again)">×</button>
+      </div>
     </div>
   `;
 
@@ -149,6 +180,9 @@
   const rulerLeft = $(".ruler.left");
   const centerLines = $$(".center");
   const grid = $(".grid");
+  const columnsEl = $(".columns");
+  const settings = $(".settings");
+  const columnInputs = $$(".settings input");
   const gridSelect = $(".panel select");
   const guidesEl = $(".guides");
   const gapsEl = $(".gaps");
@@ -161,7 +195,7 @@
   function save() {
     const guides = state.guides.map(({ axis, pos }) => ({ axis, pos }));
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ guides, center: state.center, grid: state.grid }));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ guides, center: state.center, grid: state.grid, columns: state.columns }));
     } catch {
       // Storage may be unavailable; guides then live for this page view only.
     }
@@ -464,6 +498,20 @@
     save();
   }
 
+  function renderColumns() {
+    const c = state.columns;
+    columnsEl.hidden = settings.hidden = !c.on;
+    buttons.columns.classList.toggle("on", c.on);
+    if (!c.on) return;
+    const available = `calc(100% - ${2 * c.margin}px)`;
+    columnsEl.style.width = c.width ? `min(${c.width}px, ${available})` : available;
+    columnsEl.style.gridTemplateColumns = `repeat(${c.count}, 1fr)`;
+    columnsEl.style.gap = c.gutter + "px";
+    while (columnsEl.children.length < c.count) columnsEl.append(document.createElement("div"));
+    while (columnsEl.children.length > c.count) columnsEl.lastChild.remove();
+    for (const input of columnInputs) input.value = c[input.dataset.column];
+  }
+
   function setCenter(on) {
     state.center = on;
     for (const line of centerLines) line.hidden = !on;
@@ -473,6 +521,19 @@
 
   buttons.inspect.addEventListener("click", () => setInspect(!state.inspect));
   buttons.center.addEventListener("click", () => setCenter(!state.center));
+  buttons.columns.addEventListener("click", () => {
+    state.columns.on = !state.columns.on;
+    renderColumns();
+    save();
+  });
+  for (const input of columnInputs) {
+    input.addEventListener("input", () => {
+      const value = Math.min(Number(input.max), Math.max(Number(input.min), Number(input.value) || 0));
+      state.columns[input.dataset.column] = value;
+      renderColumns();
+      save();
+    });
+  }
   gridSelect.addEventListener("change", () => {
     setGrid(Number(gridSelect.value));
     gridSelect.blur();
@@ -540,6 +601,7 @@
   setActive(null);
   setCenter(state.center);
   setGrid(state.grid);
+  renderColumns();
 
   document.documentElement.append(host);
   render();

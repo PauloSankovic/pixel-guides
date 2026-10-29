@@ -30,6 +30,9 @@ current tab. Click it again, or the `×` in the panel, to hide it.
   whether the layout is centered.
 - **Grid overlay** of 4, 8, 10, 12, 16 or 24px, anchored to the top left of
   the page, with a stronger line every fourth cell.
+- **Column grid**, centered in the viewport like a layout container. Set the
+  number of columns, the gutter, the maximum width (0 for full width) and the
+  side margin.
 - **Inspect mode.** Hover any element to see its box, its size and its
   distance to each edge of its container. Equal left/right or top/bottom gaps
   are marked `centered`. Dashed lines extend the element's edges across the
