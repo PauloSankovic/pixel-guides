@@ -438,7 +438,8 @@
   function scheduleRender() {
     if (!frame) frame = requestAnimationFrame(render);
   }
-  addEventListener("scroll", scheduleRender, { passive: true });
+  // Capture phase so scrolling inside nested containers also refreshes the inspector.
+  addEventListener("scroll", scheduleRender, { passive: true, capture: true });
   addEventListener("resize", scheduleRender);
 
   function toggle() {
